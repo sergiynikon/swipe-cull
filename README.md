@@ -1,105 +1,160 @@
 # PhotosCleaner
 
-A Tinder-style swipe app for cleaning up your iPhone camera roll. Swipe **left** to mark for deletion, **right** to keep. At the end of a session, all marked items are deleted in a single iOS-native confirmation.
+A personal iPhone app for cleaning up an overgrown camera roll using a Tinder-style swipe deck. **Swipe left to mark for deletion, swipe right to keep.** Decisions persist across sessions so you can chip away at a huge library a few items at a time, and at any point you can finish a session to delete everything you marked in a single iOS-confirmed batch.
 
-Built with React Native + Expo SDK 54. No Mac required to build (uses EAS Build cloud).
+Built with React Native + Expo SDK 54. Develops on Windows; runs on iOS. Currently designed to run inside **Expo Go** for personal use — no Apple Developer Program enrollment required.
 
-## What this does
+## Quick start
 
-- Loads photos and videos from your camera roll, newest first.
-- Stacked-card swipe deck with rotation, snap-back, and KEEP / DELETE badges.
-- Undo last swipe.
-- Single batch delete at end of session — iOS shows its own "Delete N items?" dialog (mandatory, can't be skipped).
+Runs inside the free **Expo Go** app on your iPhone — no signing, no Apple Developer account, no Mac.
 
-## One-time setup on your Windows PC
+**Prerequisites**
+- Node.js 20+ on your machine (`node -v` to check)
+- An iPhone on the same Wi-Fi as your machine
+- The free **Expo Go** app from the App Store
 
-1. **Install EAS CLI** (already have Node 24+):
-   ```powershell
-   npm install -g eas-cli
-   ```
-2. **Log in** with the same Apple ID you'll use to sign the app:
-   ```powershell
-   eas login
-   ```
-3. **Configure project** (only the first time — picks an Expo project ID):
-   ```powershell
-   eas init
-   ```
-
-## Build the iOS binary (free Apple ID)
+**Steps**
 
 ```powershell
-eas build --profile development --platform ios
+# 1. Install dependencies (first time only)
+npm install
+
+# 2. Start the dev server
+npx expo start
 ```
 
-EAS will:
-- Ask for your Apple ID credentials (free Apple ID is fine).
-- Generate a provisioning profile and certificate automatically.
-- Build the `.ipa` in their cloud (10–20 min).
-- Give you a download URL when done.
+On the iPhone:
+1. Open **Expo Go**.
+2. Scan the QR code shown in your terminal (use the iPhone camera, or Expo Go's built-in scanner).
+3. The app loads. Grant **Full Photo Library** access on first run (Settings → Expo Go → Photos → All Photos if the prompt is missed).
 
-> The `development` profile produces a dev-client binary so you can hot-reload JS changes without rebuilding. For a fully self-contained build (no Metro dev server), use `--profile preview` instead.
+Code changes hot-reload over Wi-Fi — edit any file under `src/`, save, the app refreshes.
 
-## Install on your iPhone (Sideloadly, on Windows)
+**Useful flags**
 
-1. Install **Apple iTunes** from [apple.com](https://www.apple.com/itunes/) — Sideloadly needs Apple's USB drivers. **Do not** use the Microsoft Store version.
-2. Install **Sideloadly** from [sideloadly.io](https://sideloadly.io).
-3. Connect iPhone via USB and trust the computer.
-4. In Sideloadly:
-   - Drag the `.ipa` you downloaded from EAS into the window.
-   - Enter your Apple ID.
-   - Click **Start**. Sideloadly will sign and install it.
-5. On the iPhone: **Settings → General → VPN & Device Management** → trust the developer cert under your Apple ID.
-6. Launch PhotosCleaner from the home screen, grant photo access on first run.
+| Command | When to use |
+|---|---|
+| `npx expo start` | Default — phone connects over local Wi-Fi |
+| `npx expo start --clear` | After installing a native package or hitting weird module-resolution errors |
+| `npx expo start --tunnel` | When phone and PC aren't on the same network (slower) |
 
-> Free Apple ID certificates expire after **7 days**. Re-run Sideloadly with the same `.ipa` to re-sign — no rebuild needed unless you changed native dependencies.
+> If you see `[runtime not ready]` or `Cannot find module …` after dependency changes, restart with `--clear`. Metro caches aggressively.
 
-## Iterate without rebuilding
+## Features
 
-Once the dev client is installed, you can change JS/TS and reload over Wi-Fi:
+### Swipe deck
+- Stacked-card UI with the next two cards peeking underneath.
+- Left swipe = mark for deletion · right swipe = keep.
+- Reanimated-4 driven: rotation, drift, snap-back, smooth swipe-off.
+- **KEEP** / **DELETE** badges fade in as you drag past the commit threshold.
+- **Undo** the last swipe in the current session.
 
-```powershell
-npx expo start --dev-client
-```
+### Photos and videos
+- Loads everything from the camera roll, newest first.
+- Photos render via `expo-image` with memory caching.
+- Videos:
+  - Thumbnail extracted from the first frame.
+  - Tap the card to play inline.
+  - Tap to pause / resume during playback.
+  - Replay icon appears when the video reaches the end; tap to restart.
+  - Automatically falls back to copying the file into Expo Go's sandbox if iOS denies direct access (some camera-roll paths require this).
+  - iCloud-only videos download on demand; loading message changes to "Still loading…" if it's taking a while.
 
-On the same Wi-Fi, the dev-client app on your iPhone will pick up the bundle. Edit any file under `src/`, save, and the app reloads. You only need to re-run `eas build` when adding a native dependency or changing `app.json`.
+### Pinch-to-zoom (Instagram style)
+- Two-finger pinch zooms toward the focal point — the spot under your fingers stays under your fingers.
+- Drag with two fingers to pan around the zoomed view.
+- Release to smoothly return to 1×.
+- Works on both photos and videos, even during playback.
+
+### Persistence
+- Every decision is saved to AsyncStorage as you make it.
+- On next launch, already-reviewed items are automatically skipped.
+- A small "Resuming after N reviewed · tap to reset" banner appears at the top of the deck when past decisions are present.
+- Reset wipes the app's memory of decisions; your photos are untouched.
+
+### Batch delete
+- iOS forces a confirmation dialog for any photo deletion — the app collects all left-swipes and triggers **one** native dialog at the end of a session via the **Finish** button.
+- Confirm sheet shows count and thumbnails of everything marked for deletion before triggering the iOS dialog.
+- Pending-delete list also persists across sessions, so you can swipe today and confirm the batch tomorrow.
+
+## Tech stack
+
+- **Expo SDK 54** managed workflow
+- **TypeScript** end-to-end
+- **expo-media-library** — camera-roll access, `deleteAssetsAsync` for batch delete
+- **expo-image**, **expo-video**, **expo-video-thumbnails** — media rendering
+- **expo-file-system** — sandbox copy fallback for restricted video paths
+- **react-native-reanimated 4** + **react-native-gesture-handler** — gesture and animation primitives
+- **@react-native-async-storage/async-storage** — decision persistence
 
 ## Project layout
 
 ```
 App.tsx                          Root: permission gate + GestureHandlerRootView
-index.ts                         Entry point (registers root, imports gesture-handler)
+index.ts                         Entry point
 app.json                         Expo config (iOS bundle ID, permission strings, plugins)
 eas.json                         EAS Build profiles
+babel.config.js                  Reanimated worklets plugin
 src/
   screens/
     PermissionScreen.tsx         Permission request / Open Settings fallback
-    DeckScreen.tsx               Composes header + deck + confirm sheet
+    DeckScreen.tsx               Composes header, deck, confirm sheet, reset banner
   components/
-    MediaCard.tsx                One photo or video card (with video thumb)
-    SwipeDeck.tsx                Gesture-driven card stack (Reanimated 4)
-    HeaderBar.tsx                Counter + undo + finish buttons
-    ConfirmDeleteSheet.tsx       Modal with thumbnails + batch delete
+    MediaCard.tsx                One photo or video card (thumb, player, retry UI)
+    SwipeDeck.tsx                Gesture-driven card stack — pan, pinch+focal zoom
+    HeaderBar.tsx                Counter + undo + finish
+    ConfirmDeleteSheet.tsx       Modal with thumbnails + batch delete trigger
   hooks/
     useAssets.ts                 Paginated MediaLibrary fetch (page size 50)
-    useDecisions.ts              Reducer for swipe history + undo
+    useDecisions.ts              Reducer for swipe history + undo + persistence
   lib/
-    media.ts                     MediaLibrary + VideoThumbnails wrappers
+    media.ts                     MediaLibrary, VideoThumbnails, sandbox-copy helpers
+    storage.ts                   AsyncStorage helpers for decisions
 ```
 
-## Things to know
+## Running it (Expo Go workflow — fastest, no signing)
 
-- **iOS forces the delete dialog.** No way to suppress. The app collects all left-swipes and triggers it once at the end.
-- **iCloud-only photos** may pause briefly the first time they're shown — `MediaLibrary.getAssetInfoAsync` triggers the download.
-- **Live Photos / Bursts** are single assets to MediaLibrary; deleting removes the entire stack.
-- **Reanimated 4** + `react-native-worklets` is auto-handled by `babel-preset-expo` — no custom `babel.config.js` needed.
-- **Free Apple ID limit**: max 3 sideloaded apps signed at once.
+You're a Windows developer with no Mac. The cheapest, fastest path is **Expo Go**:
 
-## Upgrading to a paid Apple Developer account later
+1. On the iPhone: install **Expo Go** from the App Store.
+2. On the PC:
+   ```powershell
+   npm install
+   npx expo start
+   ```
+3. Scan the QR code with the iPhone camera (or directly inside Expo Go).
+4. The app loads inside Expo Go's container. Grant Full Photo Library access on first run.
 
-When you're ready to stop the 7-day re-sign cycle:
-1. Pay the $99/yr at developer.apple.com.
-2. Re-run `eas build --profile preview --platform ios` — EAS will pick up the paid team automatically.
-3. Install via TestFlight or direct ad-hoc URL. App stays installed for a year.
+Code changes hot-reload over Wi-Fi — edit any file under `src/`, save, the app refreshes.
 
-No code changes required.
+### Caveats of Expo Go
+- The app shows up as "Expo Go" on the home screen, not as a standalone PhotosCleaner icon.
+- Your PC must be running `npx expo start` and on the same Wi-Fi (or use `--tunnel` for cross-network).
+- Permissions are inherited from Expo Go's own Info.plist.
+- Some camera-roll videos hit iOS sandbox restrictions; the app auto-recovers by copying into Expo Go's writable cache, but the workaround adds ~0.1–1 s of delay.
+
+For a standalone home-screen install without Expo Go, you'd need EAS Build + Sideloadly (free Apple ID, 7-day re-sign cycle) or a paid Apple Developer account ($99/yr). See the [Standalone build](#standalone-build-optional) section.
+
+## Standalone build (optional)
+
+If you want PhotosCleaner as its own app on the home screen, with its own icon and proper permission strings:
+
+### Free Apple ID — limited
+EAS Build's automatic credential provisioning requires a paid developer account. With only a free Apple ID, the workaround is to build the unsigned `.ipa` on a free macOS runner (e.g. GitHub Actions) and then sign it locally with Sideloadly using your free Apple ID. Re-signing is required every 7 days.
+
+### Paid ($99/yr) — smoothest
+```powershell
+npm install -g eas-cli
+eas login              # log in with your Expo account (create at expo.dev/signup)
+eas init               # links this folder to a new Expo project
+eas build --profile preview --platform ios
+```
+
+EAS will handle Apple credentials automatically. Output is an `.ipa` you can install via TestFlight or Sideloadly. The app stays installed for a full year per re-sign.
+
+## Known constraints
+
+- **iOS mandates the delete confirmation dialog.** No way to suppress it. The "batch at end" choice minimizes how often you see it (once per session instead of once per photo).
+- **Live Photos / Bursts** count as single assets in MediaLibrary; deletion removes the entire stack.
+- **iCloud-only items** require a download before they can be displayed or played; large videos can take a while on slow connections. Swipe to skip if you don't want to wait.
+- **Expo Go video sandbox quirks**: some videos require a copy-to-sandbox fallback inside Expo Go. A standalone development build doesn't hit this.
