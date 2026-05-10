@@ -112,28 +112,14 @@ src/
     storage.ts                   AsyncStorage helpers for decisions
 ```
 
-## Running it (Expo Go workflow — fastest, no signing)
+## Expo Go caveats
 
-You're a Windows developer with no Mac. The cheapest, fastest path is **Expo Go**:
-
-1. On the iPhone: install **Expo Go** from the App Store.
-2. On the PC:
-   ```powershell
-   npm install
-   npx expo start
-   ```
-3. Scan the QR code with the iPhone camera (or directly inside Expo Go).
-4. The app loads inside Expo Go's container. Grant Full Photo Library access on first run.
-
-Code changes hot-reload over Wi-Fi — edit any file under `src/`, save, the app refreshes.
-
-### Caveats of Expo Go
 - The app shows up as "Expo Go" on the home screen, not as a standalone PhotosCleaner icon.
-- Your PC must be running `npx expo start` and on the same Wi-Fi (or use `--tunnel` for cross-network).
+- Your PC must be running `npx expo start` and be on the same Wi-Fi as the phone (or use `--tunnel` for cross-network).
 - Permissions are inherited from Expo Go's own Info.plist.
 - Some camera-roll videos hit iOS sandbox restrictions; the app auto-recovers by copying into Expo Go's writable cache, but the workaround adds ~0.1–1 s of delay.
 
-For a standalone home-screen install without Expo Go, you'd need EAS Build + Sideloadly (free Apple ID, 7-day re-sign cycle) or a paid Apple Developer account ($99/yr). See the [Standalone build](#standalone-build-optional) section.
+For a standalone home-screen install without Expo Go, see [Standalone build](#standalone-build-optional).
 
 ## Standalone build (optional)
 
