@@ -4,6 +4,15 @@ A personal iPhone app for cleaning up an overgrown camera roll using a Tinder-st
 
 Built with React Native + Expo SDK 54. Develops on Windows; runs on iOS. Currently designed to run inside **Expo Go** for personal use — no Apple Developer Program enrollment required.
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/delete.jpg" width="320" alt="Swipe left to delete — red DELETE badge fades in as the card drifts off-screen" />
+  <img src="screenshots/keep.jpg" width="320" alt="Swipe right to keep — green KEEP badge over the photo, next card (a video) peeks underneath" />
+</p>
+
+<p align="center"><i>Left: a left-swipe in progress (DELETE badge). Right: a right-swipe revealing the next card underneath, which is a 13-second video.</i></p>
+
 ## Quick start
 
 Runs inside the free **Expo Go** app on your iPhone — no signing, no Apple Developer account, no Mac.
