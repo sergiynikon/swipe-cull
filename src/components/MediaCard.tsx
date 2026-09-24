@@ -5,11 +5,11 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { CleanerAsset, getPlayableVideoUri, getVideoThumbnail } from '../lib/media';
 
-type Props = { asset: CleanerAsset };
+type Props = { asset: CleanerAsset; active: boolean };
 
 type VideoLoadState = 'idle' | 'loading' | 'loaded' | 'failed';
 
-export function MediaCard({ asset }: Props) {
+export function MediaCard({ asset, active }: Props) {
   const [videoThumb, setVideoThumb] = useState<string | null>(null);
   const [thumbLoading, setThumbLoading] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
@@ -35,6 +35,15 @@ export function MediaCard({ asset }: Props) {
       cancelled = true;
     };
   }, [asset, isVideo]);
+
+  // A card pushed down the deck (e.g. by undo) must not keep playing behind the top card.
+  useEffect(() => {
+    if (active) return;
+    setShowPlayer(false);
+    setVideoUri(null);
+    setVideoLoadState('idle');
+    setPlayMode('direct');
+  }, [active]);
 
   useEffect(() => {
     if (!isVideo || !showPlayer) return;
@@ -66,7 +75,7 @@ export function MediaCard({ asset }: Props) {
   }, [videoLoadState]);
 
   const handleCardPress = () => {
-    if (isVideo && !showPlayer) setShowPlayer(true);
+    if (isVideo && active && !showPlayer) setShowPlayer(true);
   };
 
   const handleRetry = () => {

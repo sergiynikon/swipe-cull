@@ -191,7 +191,7 @@ function DeckCard({ asset, position, onSwipe }: DeckCardProps) {
         }}
       >
         <Animated.View style={[styles.zoomLayer, zoomStyle]}>
-          <MediaCard asset={asset} />
+          <MediaCard asset={asset} active={isTop} />
         </Animated.View>
         <Animated.View style={[styles.badge, styles.keepBadge, keepBadgeStyle]}>
           <Text style={styles.badgeText}>KEEP</Text>
