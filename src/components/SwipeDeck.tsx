@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -24,9 +24,43 @@ type Props = {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
 const SWIPE_OUT_DURATION = 220;
-const PEEK_FADE_DURATION = 220;
+const PROMOTE_DURATION = 180;
+const VISIBLE_CARDS = 3;
 
 export function SwipeDeck({ assets, cursor, onSwipe }: Props) {
+  const visible = assets.slice(cursor, cursor + VISIBLE_CARDS);
+
+  if (visible.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyText}>No more items.</Text>
+      </View>
+    );
+  }
+
+  // Cards are rendered in a stable order (top first) and stacked via zIndex, so a
+  // card moving up the deck keeps the same native view and never reloads its image.
+  return (
+    <View style={styles.deck}>
+      {visible.map((asset, position) => (
+        <DeckCard key={asset.id} asset={asset} position={position} onSwipe={onSwipe} />
+      ))}
+    </View>
+  );
+}
+
+type DeckCardProps = {
+  asset: CleanerAsset;
+  position: number;
+  onSwipe: (assetId: string, direction: Direction) => void;
+};
+
+function DeckCard({ asset, position, onSwipe }: DeckCardProps) {
+  const isTop = position === 0;
+  const assetId = asset.id;
+
+  // Each card owns its transforms: a swiped card stays off-screen until it unmounts,
+  // and the card promoted to the top starts from a clean state.
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -34,66 +68,54 @@ export function SwipeDeck({ assets, cursor, onSwipe }: Props) {
   const zoomTranslateY = useSharedValue(0);
   const initialFocalX = useSharedValue(0);
   const initialFocalY = useSharedValue(0);
-  const deckWidth = useSharedValue(SCREEN_WIDTH);
-  const deckHeight = useSharedValue(0);
+  const cardWidth = useSharedValue(0);
+  const cardHeight = useSharedValue(0);
+  const depth = useSharedValue(position);
 
-  const top = assets[cursor];
-  const next = assets[cursor + 1];
-  const after = assets[cursor + 2];
-  const topId = top?.id;
+  useEffect(() => {
+    depth.value = withTiming(position, { duration: PROMOTE_DURATION });
+  }, [position, depth]);
 
-  const handleSwipeAndReset = (assetId: string, direction: Direction) => {
-    onSwipe(assetId, direction);
-    translateX.value = 0;
-    translateY.value = 0;
-    scale.value = 1;
-    zoomTranslateX.value = 0;
-    zoomTranslateY.value = 0;
-  };
+  const onSwipeRef = useRef(onSwipe);
+  onSwipeRef.current = onSwipe;
+  const handleSwiped = (direction: Direction) => onSwipeRef.current(assetId, direction);
 
-  const pan = useMemo(() => {
-    if (!topId) return Gesture.Pan().enabled(false);
-    return Gesture.Pan()
-      .minPointers(1)
-      .maxPointers(1)
-      .onUpdate((e) => {
-        translateX.value = e.translationX;
-        translateY.value = e.translationY;
-      })
-      .onEnd((e) => {
-        if (e.translationX > SWIPE_THRESHOLD) {
-          translateY.value = withTiming(e.translationY, { duration: SWIPE_OUT_DURATION });
-          translateX.value = withTiming(
-            SCREEN_WIDTH * 1.5,
-            { duration: SWIPE_OUT_DURATION },
-            (finished) => {
-              if (finished) {
-                runOnJS(handleSwipeAndReset)(topId, 'right');
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(isTop)
+        .minPointers(1)
+        .maxPointers(1)
+        .onUpdate((e) => {
+          translateX.value = e.translationX;
+          translateY.value = e.translationY;
+        })
+        .onEnd((e) => {
+          if (Math.abs(e.translationX) > SWIPE_THRESHOLD) {
+            const direction: Direction = e.translationX > 0 ? 'right' : 'left';
+            translateY.value = withTiming(e.translationY, { duration: SWIPE_OUT_DURATION });
+            translateX.value = withTiming(
+              Math.sign(e.translationX) * SCREEN_WIDTH * 1.5,
+              { duration: SWIPE_OUT_DURATION },
+              (finished) => {
+                if (finished) {
+                  runOnJS(handleSwiped)(direction);
+                }
               }
-            }
-          );
-        } else if (e.translationX < -SWIPE_THRESHOLD) {
-          translateY.value = withTiming(e.translationY, { duration: SWIPE_OUT_DURATION });
-          translateX.value = withTiming(
-            -SCREEN_WIDTH * 1.5,
-            { duration: SWIPE_OUT_DURATION },
-            (finished) => {
-              if (finished) {
-                runOnJS(handleSwipeAndReset)(topId, 'left');
-              }
-            }
-          );
-        } else {
-          translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
-          translateY.value = withSpring(0, { damping: 18, stiffness: 180 });
-        }
-      });
+            );
+          } else {
+            translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
+            translateY.value = withSpring(0, { damping: 18, stiffness: 180 });
+          }
+        }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topId]);
+    [isTop, assetId]
+  );
 
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
+        .enabled(isTop)
         .onStart((e) => {
           initialFocalX.value = e.focalX;
           initialFocalY.value = e.focalY;
@@ -102,8 +124,8 @@ export function SwipeDeck({ assets, cursor, onSwipe }: Props) {
           const newScale = Math.max(1, Math.min(e.scale, 5));
           scale.value = newScale;
           if (newScale > 1.001) {
-            const cx = deckWidth.value / 2;
-            const cy = deckHeight.value / 2;
+            const cx = cardWidth.value / 2;
+            const cy = cardHeight.value / 2;
             zoomTranslateX.value =
               e.focalX - cx - (initialFocalX.value - cx) * newScale;
             zoomTranslateY.value =
@@ -119,15 +141,12 @@ export function SwipeDeck({ assets, cursor, onSwipe }: Props) {
           zoomTranslateY.value = withTiming(0, { duration: 220 });
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [isTop]
   );
 
-  const composedGesture = useMemo(
-    () => Gesture.Simultaneous(pan, pinch),
-    [pan, pinch]
-  );
+  const composedGesture = useMemo(() => Gesture.Simultaneous(pan, pinch), [pan, pinch]);
 
-  const topCardStyle = useAnimatedStyle(() => {
+  const cardStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
       [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
@@ -135,10 +154,12 @@ export function SwipeDeck({ assets, cursor, onSwipe }: Props) {
       Extrapolation.CLAMP
     );
     return {
+      opacity: interpolate(depth.value, [1, 2], [1, 0.7], Extrapolation.CLAMP),
       transform: [
         { translateX: translateX.value },
-        { translateY: translateY.value },
+        { translateY: translateY.value + depth.value * 8 },
         { rotate: `${rotate}deg` },
+        { scale: 1 - depth.value * 0.05 },
       ],
     };
   });
@@ -159,51 +180,24 @@ export function SwipeDeck({ assets, cursor, onSwipe }: Props) {
     opacity: interpolate(translateX.value, [-SCREEN_WIDTH * 0.3, -40], [1, 0], Extrapolation.CLAMP),
   }));
 
-  if (!top) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyText}>No more items.</Text>
-      </View>
-    );
-  }
-
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View
-        style={styles.deck}
+        style={[styles.cardSlot, { zIndex: VISIBLE_CARDS - position }, cardStyle]}
+        pointerEvents={isTop ? 'auto' : 'none'}
         onLayout={(e) => {
-          deckWidth.value = e.nativeEvent.layout.width;
-          deckHeight.value = e.nativeEvent.layout.height;
+          cardWidth.value = e.nativeEvent.layout.width;
+          cardHeight.value = e.nativeEvent.layout.height;
         }}
       >
-        {after ? (
-          <Animated.View
-            key={after.id}
-            style={[styles.cardSlot, styles.cardBack2]}
-            pointerEvents="none"
-          >
-            <MediaCard asset={after} />
-          </Animated.View>
-        ) : null}
-        {next ? (
-          <Animated.View
-            key={next.id}
-            style={[styles.cardSlot, styles.cardBack1]}
-            pointerEvents="none"
-          >
-            <MediaCard asset={next} />
-          </Animated.View>
-        ) : null}
-        <Animated.View key={top.id} style={[styles.cardSlot, topCardStyle]}>
-          <Animated.View style={[styles.zoomLayer, zoomStyle]}>
-            <MediaCard asset={top} />
-          </Animated.View>
-          <Animated.View style={[styles.badge, styles.keepBadge, keepBadgeStyle]}>
-            <Text style={styles.badgeText}>KEEP</Text>
-          </Animated.View>
-          <Animated.View style={[styles.badge, styles.deleteBadge, deleteBadgeStyle]}>
-            <Text style={styles.badgeText}>DELETE</Text>
-          </Animated.View>
+        <Animated.View style={[styles.zoomLayer, zoomStyle]}>
+          <MediaCard asset={asset} />
+        </Animated.View>
+        <Animated.View style={[styles.badge, styles.keepBadge, keepBadgeStyle]}>
+          <Text style={styles.badgeText}>KEEP</Text>
+        </Animated.View>
+        <Animated.View style={[styles.badge, styles.deleteBadge, deleteBadgeStyle]}>
+          <Text style={styles.badgeText}>DELETE</Text>
         </Animated.View>
       </Animated.View>
     </GestureDetector>
@@ -224,13 +218,6 @@ const styles = StyleSheet.create({
   },
   zoomLayer: {
     flex: 1,
-  },
-  cardBack1: {
-    transform: [{ scale: 0.95 }, { translateY: 8 }],
-  },
-  cardBack2: {
-    transform: [{ scale: 0.9 }, { translateY: 16 }],
-    opacity: 0.7,
   },
   empty: {
     flex: 1,
