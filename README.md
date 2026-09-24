@@ -17,12 +17,12 @@ Built with React Native + Expo. Designed to run inside Expo Go — no Apple Deve
 
 ```powershell
 npm install
-npx expo start
+npx expo start --go
 ```
 
-Open Expo Go on the iPhone, scan the QR code, grant **Full Photo Library** access on first run.
+Scan the QR code with the iPhone Camera app to open it in Expo Go, then grant **Full Photo Library** access on first run. The `--go` flag is needed because `expo-dev-client` is installed; without it the QR code targets a development build instead of Expo Go.
 
-If you see `[runtime not ready]` or module-resolution errors after a dependency change, restart with `npx expo start --clear`.
+If you see `[runtime not ready]` or module-resolution errors after a dependency change, restart with `npx expo start --go --clear`.
 
 ## Features
 
@@ -34,7 +34,7 @@ If you see `[runtime not ready]` or module-resolution errors after a dependency 
 
 ## Tech stack
 
-- **Expo SDK 54** managed workflow
+- **Expo SDK 57** managed workflow
 - **TypeScript** end-to-end
 - **expo-media-library** — camera-roll access and batch delete
 - **expo-image**, **expo-video**, **expo-video-thumbnails** — media rendering
